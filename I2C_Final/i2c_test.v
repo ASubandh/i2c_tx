@@ -1,0 +1,68 @@
+// tb_and_gate.v
+`timescale 1us/1ps   // optional but recommended
+
+module i2c_test;
+
+
+//testbench inputs
+    reg clk;
+    reg reset;
+    reg [6:0] address;
+    reg [7:0] data;
+
+//outputs
+wire i2c_sda;
+wire i2c_scl;
+wire i2c_clk;
+wire io_PMOD_1;
+wire io_PMOD_2;
+
+//Instantiate UUT
+
+i2c_master_top UUT (
+    .i_Clk(clk),
+    .reset(reset),
+    .io_PMOD_1(i2c_scl),
+    .io_PMOD_2(i2c_sda)
+);
+
+step1 i2c_master (
+    .i2c_clk(i2c_clk),
+    .reset(reset),
+    .i2c_sda(i2c_sda),
+    .i2c_scl(i2c_scl)
+);
+
+i2c_clk_divider #(.DELAY(1000)) clockdivider(
+    .reset(reset),
+    .ref_clk(clk),
+    .i2c_clk(i2c_clk)
+);
+
+initial begin
+    clk = 0;
+    forever begin
+        clk = #5 ~clk; //2ns period
+    end
+end
+
+    initial begin
+        // Waveform dump (for GTKWave or ModelSim)
+        //$dumpfile("step1_tb.vcd");
+        //$dumpvars(0, step1_tb);
+
+        // Init signals
+        clk = 0;
+        reset = 1;
+
+        // Hold reset for a bit
+      #10000;
+        reset = 0;
+
+        // Run simulation for a while
+        #160000;
+        $finish;
+
+    end
+
+endmodule

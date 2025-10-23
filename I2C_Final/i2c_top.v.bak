@@ -1,0 +1,114 @@
+//goal is to write the letter "A" at address 0x3F
+
+module step1 (
+    input wire i_Clk, //change
+    input wire reset,
+    output reg i2c_sda,
+    output wire i2c_scl,
+    output wire ready,
+
+    //output 
+    output wire io_PMOD_1, //scl_out
+    output wire io_PMOD_2 //sda_out, could be inout
+);
+    parameter IDLE         = 3'b000;
+    parameter START        = 3'b001;
+    parameter MSB_ADDRESS  = 3'b010;
+    parameter RW           = 3'b011;
+    parameter ACK          = 3'b100;
+    parameter DATA_RW      = 3'b101;
+    parameter ACK_2        = 3'b110;
+    parameter STOP         = 3'b111;
+    
+    reg [2:0] STATE;
+    reg [6:0] ADDR = 7'h3f; //7 bits, 0x3F
+    reg [7:0] COUNT;
+    reg [7:0] DATA = "A";
+    reg i2c_scl_en = 0;
+    
+
+//instance of clock divider
+  i2c_clk_divider #(.CLKS_PER_BIT(217)) UART_RX_Inst
+  (.ref_clk(i_Clk),
+   .reset(reset),
+   .i2c_clk(i2c_clk)); //change to be sure?
+
+assign i2c_scl  = (i2c_scl_en == 0) ? 1 : ~i2c_clk;
+assign ready = ((reset == 0) && (STATE == IDLE)) ? 1 : 0;
+   
+
+always @(negedge i2c_clk) begin
+    if (reset == 1) begin
+        i2c_scl_en <= 0;
+    end else begin
+        if ((STATE == IDLE) || (STATE == START) || (STATE == STOP)) begin
+            i2c_scl_en <= 0; //we dont want the clock to be active during this state
+        end
+        else begin
+            i2c_scl_en <= 1;
+        end
+    end
+end
+
+always @(posedge i2c_clk) begin
+    if (reset == 1) begin
+        STATE <= IDLE;
+        i2c_sda <= 1;
+        //i2c_scl <= 1;
+        ADDR <= 7'h3F;
+        COUNT <= 8'd0;
+
+    end
+    else begin
+        case(STATE)
+
+        IDLE: begin
+            i2c_sda <= 1;
+            STATE <= 1; //WHY NOT STAY IN 0??
+        end
+        
+        START: begin
+            i2c_sda <= 0;
+            COUNT <= 6;
+            STATE <= MSB_ADDRESS;
+        end
+
+        MSB_ADDRESS: begin
+            i2c_sda <= ADDR[COUNT]; //driving it one bit at a time
+            if (COUNT == 0) STATE <= RW; //?? 
+            else COUNT <= COUNT -1;
+
+        end
+        
+        RW: begin
+            i2c_sda <= 0; //wr =0, rd = 1;
+            STATE <= ACK;
+        end
+
+        ACK: begin
+            STATE <= DATA_RW;
+            COUNT <= 7;
+        end
+
+        DATA_RW: begin
+            i2c_sda <= DATA[COUNT];
+            if (COUNT == 0) STATE <= ACK_2; //?? 
+            else COUNT <= COUNT -1;
+        end
+
+        ACK_2: begin
+            STATE <= STOP;
+        end
+
+        STOP: begin
+            i2c_sda <= 1;
+            STATE <= IDLE;
+        end
+        endcase
+    end
+
+end
+assign io_PMOD_2 = i2c_sda;
+assign io_PMOD_1 = i2c_scl_en;
+
+endmodule
